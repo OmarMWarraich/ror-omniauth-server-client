@@ -3,6 +3,13 @@ require 'sidekiq/web'
 Rails.application.routes.draw do
   draw :madmin
   use_doorkeeper
+
+  namespace :api do
+    namespace :v1 do
+      get 'me', to: 'users#me'
+    end
+  end
+
   get '/privacy', to: 'home#privacy'
   get '/terms', to: 'home#terms'
 authenticate :user, lambda { |u| u.admin? } do
