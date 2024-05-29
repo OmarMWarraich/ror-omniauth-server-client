@@ -21,6 +21,10 @@ module Users
       handle_auth "Github"
     end
 
+    def doorkept
+      handle_auth "Doorkept"
+    end
+
     private
 
     def handle_auth(kind)
