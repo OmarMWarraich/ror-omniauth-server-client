@@ -4,17 +4,12 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import "react-native-reanimated";
-
+import { JsStack } from "../layouts/js-stack";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-// SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
+export default function Layout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -31,11 +26,21 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </ThemeProvider>
+    <JsStack
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: colorScheme === "dark" ? "#000" : "#fff",
+        },
+        headerTintColor: colorScheme === "dark" ? "#fff" : "#000",
+        headerTitleStyle: {
+          fontFamily: "SpaceMono",
+        },
+      }}
+      initialRouteName="auth"
+    >
+      <JsStack.Screen name="auth" options={{ title: "Auth" }} />
+      <JsStack.Screen name="home" options={{ title: "Home" }} />
+    </JsStack>
   );
 }

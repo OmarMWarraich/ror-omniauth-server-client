@@ -1,76 +1,113 @@
 import * as AuthSession from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
-import { post, ENDPOINT } from "./network";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useState } from "react";
+import { Alert } from "react-native";
 
-const APP_ID = "6Z6SkDBNNV3sYa-__ysrUHAfUFDOnB41LPBgOZ9Tg_8";
+type AuthResultType = {
+  type: "error" | "success";
+  errorCode: string | null;
+  error?: AuthSession.AuthError | null;
+  params: Record<string, string>;
+  authentication: AuthSession.TokenResponse | null;
+  url: string;
+};
+
+WebBrowser.maybeCompleteAuthSession();
+
+const ENDPOINT = "http://localhost:5000";
+const APP_ID =
+  "d1fd38bf45771da9a602ed9762bf2d9c4004053b6c380b76322fc12a58a08442";
 const TOKEN_KEY = "token";
-export let token: string | null = null;
+export var token: string | null;
 
-const discovery = AuthSession.useAutoDiscovery("http://localhost:3000");
+const redirectUri = AuthSession.makeRedirectUri();
 
-// Check if the user is logged in
-export const isLoggedIn = async () => {
-  try {
-    const storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
-    if (storedToken !== null) {
-      token = storedToken;
-      return true;
-    }
-    return false;
-  } catch (error) {
-    throw new Error(`Error checking login status: ${error}`);
-  }
-};
+export const useAuth = () => {
+  const [authResult, setAuthResult] = useState<AuthResultType | null>(null);
 
-// Log in the user
-export const login = async () => {
-  const redirectUri = AuthSession.makeRedirectUri({
-    native: "myapp://redirect",
-    useProxy: true,
-  });
+  const discovery = AuthSession.useAutoDiscovery(`${ENDPOINT}/oauth/authorize`);
+  const [request, result, promptAsync] = AuthSession.useAuthRequest(
+    {
+      redirectUri,
+      clientId: APP_ID,
+      responseType: "code",
+      scopes: ["read"],
+    },
+    discovery
+  );
 
-  const authUrl = `${ENDPOINT}/oauth/authorize?response_type=code&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(
-    redirectUri
-  )}`;
-
-  const result = await AuthSession.startAsync({ authUrl });
-
-  if (result.type === "success" && result.params?.code) {
+  const isLoggedIn = async () => {
     try {
-      const response = await post("/oauth/token", {
-        grant_type: "authorization_code",
-        code: result.params.code,
-        client_id: APP_ID,
-        redirect_uri: redirectUri,
-      });
-
-      if (response.access_token) {
-        await SecureStore.setItemAsync(TOKEN_KEY, response.access_token);
-        token = response.access_token;
+      const res = await SecureStore.getItemAsync(TOKEN_KEY);
+      if (res !== null) {
+        token = res;
         return true;
-      } else {
-        throw new Error(`Token response error: ${response.error}`);
       }
-    } catch (error) {
-      throw new Error(`Login failed: ${error}`);
+      return false;
+    } catch (err) {
+      throw err;
     }
-  } else {
-    if ("params" in result) {
-      throw new Error(
-        `Authentication failed: ${result.params?.error || "Unknown error"}`
-      );
-    } else {
-      throw new Error("Authentication failed: Unknown error");
-    }
-  }
-};
+  };
 
-// Log out the user
-export const logout = async () => {
-  try {
+  useEffect(() => {
+    if (result) {
+      if (result.type === "error") {
+        Alert.alert(
+          "Authentication error",
+          result.params.error_description || "something went wrong"
+        );
+        return;
+      }
+      if (result.type === "success") {
+        setAuthResult(result);
+      }
+    }
+  }, [result]);
+
+  const getAccessToken = async (code: any) => {
+    try {
+      const response = await fetch(`${ENDPOINT}/oauth/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: `grant_type=authorization_code&code=${code}&redirect_uri=${redirectUri}&client_id=${APP_ID}&code_verifier=${
+          request ? request.codeVerifier : ""
+        }`,
+      });
+      const data = await response.json();
+      await SecureStore.setItemAsync(TOKEN_KEY, data.access_token);
+      token = data.access_token;
+      return true;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    if (authResult && authResult.params && authResult.params.code) {
+      getAccessToken(authResult.params.code);
+    }
+  }, [authResult]);
+
+  const login = async () => {
+    const promptResult = await promptAsync();
+    if (
+      promptResult.type === "success" &&
+      promptResult.params &&
+      promptResult.params.code
+    ) {
+      await getAccessToken(promptResult.params.code);
+    } else {
+      throw new Error("Login failed");
+    }
+  };
+
+  const logout = async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     token = null;
-  } catch (error) {
-    throw new Error(`Logout failed: ${error}`);
-  }
+  };
+
+  return { login, logout, isLoggedIn };
 };
