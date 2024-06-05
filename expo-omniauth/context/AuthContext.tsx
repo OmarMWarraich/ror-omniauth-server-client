@@ -1,7 +1,7 @@
 import * as AuthSession from "expo-auth-session";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Alert } from "react-native";
 
 type AuthResultType = {
@@ -16,14 +16,27 @@ type AuthResultType = {
 WebBrowser.maybeCompleteAuthSession();
 
 const ENDPOINT = "http://localhost:5000";
-const APP_ID =
-  "0yYkiu1bdq3jGEmyWcbaoK2wfPx_rNWzHCkfDlj9Eao";
+const APP_ID = "0yYkiu1bdq3jGEmyWcbaoK2wfPx_rNWzHCkfDlj9Eao";
 const TOKEN_KEY = "token";
-export var token: string | null;
-
 const redirectUri = AuthSession.makeRedirectUri();
 
-export const useAuth = () => {
+type AuthProps = {
+  token: string | null;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  isLoggedIn: () => Promise<boolean>;
+  initialized: boolean;
+};
+
+const AuthContext = createContext<Partial<AuthProps>>({});
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export const AuthProvider = ({ children }: any) => {
+  const [token, setToken] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const [authResult, setAuthResult] = useState<AuthResultType | null>(null);
 
   const discovery = AuthSession.useAutoDiscovery(`${ENDPOINT}/oauth/authorize`);
@@ -38,27 +51,24 @@ export const useAuth = () => {
   );
 
   const isLoggedIn = async () => {
-    try {
-      const res = await SecureStore.getItemAsync(TOKEN_KEY);
-      if (res !== null) {
-        token = res;
-        return true;
-      }
-      return false;
-    } catch (err: unknown) {
-  if (typeof err === 'object' && err !== null) {
-    // We've now narrowed down the type of `err` to `object` (non-null)
-    const error = err as { message?: string };  // Further narrow down the type
-    if (error.message === 'Network request failed') {
-      console.error('Network error:', error);
-    } else {
-      throw error;
+  try {
+    const res = await SecureStore.getItemAsync(TOKEN_KEY);
+    if (res !== null) {
+      setToken(res);
+      return true;
     }
-  } else {
-    throw err;
+    return false;
+  } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null) {
+      const error = err as { message?: string };
+      if (error.message === 'Network request failed') {
+        console.error('Network error:', error);
+      }
+    }
+    // Ensure a boolean is always returned
+    return false;
   }
-  }
-  };
+};
 
   useEffect(() => {
     if (result) {
@@ -88,7 +98,7 @@ export const useAuth = () => {
       });
       const data = await response.json();
       await SecureStore.setItemAsync(TOKEN_KEY, data.access_token);
-      token = data.access_token;
+      setToken(data.access_token);
       return true;
     } catch (err) {
       throw err;
@@ -100,6 +110,17 @@ export const useAuth = () => {
       getAccessToken(authResult.params.code);
     }
   }, [authResult]);
+
+  useEffect(() => {
+    const loadToken = async () => {
+      const storedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+      if (storedToken) {
+        setToken(storedToken);
+      }
+      setInitialized(true);
+    };
+    loadToken();
+  }, []);
 
   const login = async () => {
     const promptResult = await promptAsync();
@@ -116,8 +137,16 @@ export const useAuth = () => {
 
   const logout = async () => {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
-    token = null;
+    setToken(null);
   };
 
-  return { login, logout, isLoggedIn };
+  const value = {
+    initialized,
+    login,
+    logout,
+    isLoggedIn,
+    token,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

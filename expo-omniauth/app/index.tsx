@@ -1,49 +1,40 @@
-import { Link } from "expo-router";
-import React, { useEffect } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@/auth";
+import React, { useEffect } from 'react';
+import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 
-const Page = () => {
-  const { isLoggedIn } = useAuth();
-  const checkAuth = async () => {
-    const res = await isLoggedIn();
-    console.log(res);
-  };
+import { useAuth } from '@/context/AuthContext';
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+
+
+const AuthLoadingScreen: React.FC= () => {
+    const { isLoggedIn } = useAuth();
+  
   useEffect(() => {
-    checkAuth();
-  }, []);
-  return (
-    <View>
-      <Text>There will be dragons</Text>
-      <Link href={"/auth"} asChild>
-        <TouchableOpacity
-          style={{
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 8,
-          }}
-        >
-          <Text style={{ fontSize: 18 }}>Open auth</Text>
-          <Ionicons name="arrow-forward" size={18} />
-        </TouchableOpacity>
-      </Link>
+    const handleLogin = async () => {
+      const loggedIn = isLoggedIn ? await isLoggedIn() : false;
+      // This will switch to the App screen or Auth screen and this loading
+      // screen will be unmounted and thrown away.
+      router.push(loggedIn ? '/(authenticated)/(tabs)/profile' : '/sign_in');
+    };
 
-      <Link href={"/home"} asChild>
-        <TouchableOpacity
-          style={{
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 8,
-          }}
-        >
-          <Text style={{ fontSize: 18 }}>Open home</Text>
-          <Ionicons name="arrow-forward" size={18} />
-        </TouchableOpacity>
-      </Link>
+    handleLogin();
+  }, [isLoggedIn, router]);
+
+  // Render any loading content that you like here
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator />
+      <StatusBar barStyle="default" />
     </View>
   );
 };
-export default Page;
+
+export default AuthLoadingScreen;
